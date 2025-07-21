@@ -1,0 +1,6 @@
+{
+    "packet_loss_rate": 0.2,
+    "ack_loss_rate": 0.1,
+    "propagation_delay_ms:": 100,
+    "window_size": 4
+}
