@@ -27,7 +27,9 @@ void UnreliableChannel::send_to_sender(const Packet& ack) {
 }
 
 void UnreliableChannel::deliver_to_receiver(Packet pkt) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(propagation_delay_ms));
+    int jitter = rand() % 300;
+    int randomized_delay = propagation_delay_ms + jitter;
+    std::this_thread::sleep_for(std::chrono::milliseconds(randomized_delay));
 
     std::lock_guard<std::mutex> lock(mtx);
     sender_to_receiver.push(pkt);

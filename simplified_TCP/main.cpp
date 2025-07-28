@@ -2,43 +2,68 @@
 #include <vector>
 #include <chrono>
 #include <thread>
+
 #include "common/packet.h"
 #include "channel/unreliable_channel.h"
 #include "sender/sender.h"
+#include "receiver/receiver.h"
 
 int main() {
+    double packet_loss, ack_loss;
+    int propagation_delay_ms, window_size;
     srand(time(nullptr));
 
-    // No packet loss, short delay to keep things visible
-    UnreliableChannel channel(0.0, 0.0, 200);
+    // channel(packet loss rate, ACK loss rate, propagation delay)
 
-    // Sender with window size = 3
-    Sender sender(channel, 3);
+    std::cout << "Enter packet loss rate: ";
+    std::cin >> packet_loss;
+    std::cout << "\nEnter ACK loss rate: ";
+    std::cin >> ack_loss;
+    std::cout << "\nEnter propagation delay (ms): ";
+    std::cin >> propagation_delay_ms;
+    UnreliableChannel channel(packet_loss, ack_loss, propagation_delay_ms);
 
-    // Messages to send
-    std::vector<std::string> messages = {
-        "Packet 0", "Packet 1", "Packet 2", "Packet 3", "Packet 4"
-    };
+    // create a sender and a receiver
+    std::cout <<"Enter window size for sender: ";
+    std::cin >> window_size;
 
-    std::cout << "\n=== Sending Packets ===\n";
-    sender.send_data(messages);
+    int timeout_ms = 2 * propagation_delay_ms + 300 + 200; // safety
 
-    std::cout << "=== Done Sending (no ACKs yet) ===\n";
+    Sender sender(channel, window_size, timeout_ms);
+    Receiver receiver(channel);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(800));
+    std::vector<std::string> messages;
+    for (int i = 0; i < 20; i++){
+        messages.push_back("Packet " + std::to_string(i));
+    }
 
-    // manually simulate for now 
-    channel.send_to_sender(Packet(0,0,true, "We've established a connection :D"));
-    channel.send_to_sender(Packet(0,1,true, "what up chat?"));
-    channel.send_to_sender(Packet(0,2,true, "eggs "));
+    std::cout << "\n=== Starting TCP Simulation ===\n";
 
-    std::cout << "\n=== Receiving ACKs ===\n";
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    sender.receive_acks();
+    while (!sender.is_done(messages.size())){
+        sender.send_data(messages);
+        sender.check_timeouts();
+        std::cout << "\n";
 
-    // try to send more 
-    std::cout << "\n=== Sending Remaining Packets ===\n";
-    sender.send_data(messages);
+        receiver.process_packets();
+        std::cout << "\n";
 
+        sender.receive_acks();
+        std::cout << "\n";
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    }
+
+    
+    const auto& failed = sender.get_failed_packets();
+    if (!failed.empty()){
+        std::cout << "[Logger] Failed to deliver the following packets after max retries: \n";
+        for (auto seq : failed){
+            std::cout << " - Packet seq=" << seq << '\n';
+        }
+    } else{
+        std::cout << "[Logger] All packets were successfully delivered and acknowledged.\n";
+    }
+    
+    
     return 0;
 }
